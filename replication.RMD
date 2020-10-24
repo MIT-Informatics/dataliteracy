@@ -1,0 +1,15 @@
+---
+title: "Data Literacy Analysis"
+output: html_notebook
+---
+# Data Loading and prep
+```{r}
+require(tidyverse)
+require(haven)
+require(labelled)
+
+raw.df <- read_spss("2.009 Survey_October 21, 2020_14.56.sav")
+clean.df <- raw.df %>% select(starts_with("Q"))
+```
+# Figure for 2.009
+
