@@ -2,14 +2,100 @@
 title: "Data Literacy Analysis"
 output: html_notebook
 ---
-# Data Loading and prep
+# Prep
 ```{r}
+## libraries
 require(tidyverse)
 require(haven)
 require(labelled)
-
-raw.df <- read_spss("2.009 Survey_October 21, 2020_14.56.sav")
-clean.df <- raw.df %>% select(starts_with("Q"))
 ```
+
+
+```{r}
+require(magrittr)
+```
+```{r}
+## deid
+doraw<-FALSE # identified data not available for public replication
+
+if (doraw) {
+  raw.df <- read_spss("2.009 Survey_October 21, 2020_14.56.sav")
+  deid.df <- raw.df %>% select(starts_with("Q"))
+  deid.df %<>% head(-2) %>% tail(-1)
+  deid.df %<>% select(-QA1) %>% mutate(ID_PERSON=1:n())
+  write_sav(deid.df,"deid.sav")
+}
+
+deid.df<-read_spss("deid.sav")
+```
+```{r}
+clean.df <- deid.df
+clean.df %<>% to_factor()
+tmplv <- levels(clean.df$QB3_1)
+tmplb <- labels(clean.df$QB3_1)
+clean.df %<>% mutate ( QB3_1 =   ifelse( is.na(QB3_1), QB3_1.0, QB3_1 ) ) 
+clean.df %<>% mutate ( QB3_2 =   ifelse( is.na(QB3_2), QB3_2.0, QB3_2 ) ) 
+clean.df %<>% mutate ( QB3_3 =   ifelse( is.na(QB3_3), QB3_3.0, QB3_3 ) ) 
+clean.df %<>% mutate ( QB3_4 =   ifelse( is.na(QB3_4), QB3_4.0, QB3_1 ) ) 
+clean.df %<>% mutate ( QB3_5 =   ifelse( is.na(QB3_5), QB3_5.0, QB3_5) ) 
+clean.df %<>% mutate ( QB3_6 =   as.numeric(QB3_6) ) 
+
+clean.df %<>%
+  mutate(ID_TEAM = as.numeric(QA2)) %>%
+  rename(
+  "VAL_DIFFICULTY_CHARACTERIZE"=QB3_1,
+  "VAL_DIFFICULTY_IDENTIFY"=QB3_2,
+  "VAL_DIFFICULTY_EVALUATE"=QB3_3,
+  "VAL_DIFFICULTY_EXTRACT"=QB3_4,
+  "VAL_DIFFICULTY_SUMMARIZE"=QB3_5,
+  "VAL_DIFFICULTY_CREATE"=QB3_6) %>% relocate(c(starts_with("ID_"),starts_with("VAL_"))) %>% select(-starts_with("QB3"))
+
+clean.df %<>% mutate ( across( starts_with("VAL_DIFFICULTY"), ~factor(.x,levels=tmplb,labels=tmplv)))
+
+
+gsum.table  <-clean.df %>% 
+  group_by(ID_TEAM) %>%  
+    summarise( across(starts_with("VAL_"), ~mean( as.numeric(.x), na.rm = TRUE) )) %>% mutate(VAL_DIFFICULTY_CREATE=if_else(is.nan(VAL_DIFFICULTY_CREATE),0,VAL_DIFFICULTY_CREATE)) %>% mutate(VAL_DIFFICULTY_CREATE=na_if(VAL_DIFFICULTY_CREATE,0))
+
+```
+
 # Figure for 2.009
+
+```{r}
+
+#require(plotly)
+require(ggforce)
+#require(GGally)
+#require(ggparallel)
+```
+```{r}
+long.table <- gsum.table %>% pivot_longer(cols=starts_with("VAL_DIFFICULTY"),names_to="names",values_to="difficulty", values_drop_na=FALSE) %>% mutate(task=str_replace(names,"VAL_DIFFICULTY_","")) %>% rename("TEAM"="ID_TEAM") %>% 
+  mutate(difficulty =factor(difficulty), value=1)
+
+#long.table  %>% ggplot( aes(task, id = TEAM, split = difficulty, value = value)) +    geom_parallel_sets( alpha = 0.3, axis.width = 0.1)
+
+
+ gsum.table %>% 
+   rename("SUMMARIZE"="VAL_DIFFICULTY_SUMMARIZE",
+          "EXTRACT"="VAL_DIFFICULTY_EXTRACT",
+          "EVALUATE"="VAL_DIFFICULTY_EVALUATE",
+          "IDENTIFY"="VAL_DIFFICULTY_IDENTIFY",
+          "CHARACTERIZE"="VAL_DIFFICULTY_CHARACTERIZE",
+          "CREATE"="VAL_DIFFICULTY_CREATE",
+          ) %>%
+   ggparcoord(data=.,
+              columns=2:7, groupColumn=1, scale="globalminmax", 
+              alphaLines=.2, order="allClass", missing="min10", 
+              title= "",
+              mapping = aes(color=0)) +
+   labs (y="", x="") +
+   scale_y_continuous(limits=c(1.5,6.5), breaks=c(2,4,6), labels=c("Easy","Neutral","Difficult")) +
+   geom_boxplot(aes_string(group = "variable"), width = 0.3,
+                 outlier.color = "black") +
+              coord_flip() + 
+              theme(legend.position="none")
+
+```
+
+
 
